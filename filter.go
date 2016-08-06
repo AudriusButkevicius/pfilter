@@ -1,10 +1,10 @@
 package pfilter
 
 import (
-	"fmt"
 	"net"
 	"sort"
 	"sync"
+	"sync/atomic"
 )
 
 // Filter object receives all data sent out on the Outgoing callback,
@@ -12,7 +12,7 @@ import (
 // the Receive callback
 type Filter interface {
 	Outgoing([]byte, net.Addr)
-	Receive([]byte, net.Addr) bool
+	ClaimIncoming([]byte, net.Addr) bool
 }
 
 // NewPacketFilter creates a packet filter object wrapping the given packet
@@ -31,11 +31,13 @@ type PacketFilter struct {
 	conns     []*FilteredConn
 	startOnce sync.Once
 	mut       sync.Mutex
+
+	dropped uint64
 }
 
 // NewConn returns a new net.PacketConn object which filters packets based
 // on the provided filter. If filter is nil, the connection will receive all
-// packets. Priority decides which connection gets the packet first.
+// packets. Priority decides which connection gets the ability to claim the packet.
 func (d *PacketFilter) NewConn(priority int, filter Filter) (net.PacketConn, error) {
 	conn := &FilteredConn{
 		priority:   priority,
@@ -71,8 +73,14 @@ func (d *PacketFilter) NumberOfConns() int {
 	return n
 }
 
+// Dropped returns number of packets dropped due to nobody claiming them.
+func (d *PacketFilter) Dropped() uint64 {
+	return atomic.LoadUint64(&d.dropped)
+}
+
 func (d *PacketFilter) run() {
 	var buf []byte
+next:
 	for {
 		buf = bufPool.Get().([]byte)
 		n, addr, err := d.ReadFrom(buf[:maxPacketSize])
@@ -84,16 +92,15 @@ func (d *PacketFilter) run() {
 		}
 
 		d.mut.Lock()
-		for _, conn := range d.conns {
-			if conn.filter == nil || conn.filter.Receive(pkt.buf, pkt.addr) {
+		conns := d.conns
+		d.mut.Unlock()
+		for _, conn := range conns {
+			if conn.filter == nil || conn.filter.ClaimIncoming(pkt.buf, pkt.addr) {
 				conn.recvBuffer <- pkt
-				goto dispatched
+				goto next
 			}
 		}
 
-		fmt.Println("dropped")
-
-	dispatched:
-		d.mut.Unlock()
+		atomic.AddUint64(&d.dropped, 1)
 	}
 }
