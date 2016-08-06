@@ -59,11 +59,9 @@ func (r *FilteredConn) ReadFrom(b []byte) (n int, addr net.Addr, err error) {
 	}
 
 	var timeout <-chan time.Time
-	deadline := r.deadline.Load()
-	if deadline != nil {
-		if tdeadline, ok := deadline.(time.Time); ok && !tdeadline.IsZero() {
-			timeout = time.After(tdeadline.Sub(time.Now()))
-		}
+
+	if deadline, ok := r.deadline.Load().(time.Time); ok && !deadline.IsZero() {
+		timeout = time.After(deadline.Sub(time.Now()))
 	}
 
 	select {
