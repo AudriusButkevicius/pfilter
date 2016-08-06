@@ -1,9 +1,8 @@
 package pfilter
 
 import (
-	"fmt"
 	"net"
-	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -15,9 +14,8 @@ type FilteredConn struct {
 
 	filter Filter
 
-	deadline time.Time
-	closed   bool
-	mut      sync.Mutex
+	deadline atomic.Value
+	closed   int32
 }
 
 // LocalAddr returns the local address
@@ -27,9 +25,7 @@ func (r *FilteredConn) LocalAddr() net.Addr {
 
 // SetReadDeadline sets a read deadline
 func (r *FilteredConn) SetReadDeadline(t time.Time) error {
-	r.mut.Lock()
-	r.deadline = t
-	r.mut.Unlock()
+	r.deadline.Store(t)
 	return nil
 }
 
@@ -46,36 +42,45 @@ func (r *FilteredConn) SetDeadline(t time.Time) error {
 
 // WriteTo writes bytes to the given address
 func (r *FilteredConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
+	if atomic.LoadInt32(&r.closed) == 1 {
+		return 0, errClosed
+	}
+
 	if r.filter != nil {
 		r.filter.Outgoing(b, addr)
 	}
 	return r.source.WriteTo(b, addr)
 }
 
-// WriteTo reads from the filtered connection
+// ReadFrom reads from the filtered connection
 func (r *FilteredConn) ReadFrom(b []byte) (n int, addr net.Addr, err error) {
-	r.mut.Lock()
-	timeout := time.After(r.deadline.Sub(time.Now()))
-	r.mut.Unlock()
+	if atomic.LoadInt32(&r.closed) == 1 {
+		return 0, nil, errClosed
+	}
+
+	var timeout <-chan time.Time
+	deadline := r.deadline.Load()
+	if deadline != nil {
+		if tdeadline, ok := deadline.(time.Time); ok && !tdeadline.IsZero() {
+			timeout = time.After(tdeadline.Sub(time.Now()))
+		}
+	}
 
 	select {
 	case <-timeout:
 		return 0, nil, &timeoutError{}
 	case pkt := <-r.recvBuffer:
-		copy(b, pkt.buf)
-		bufPool.Put(pkt.buf)
+		copy(b[:pkt.n], pkt.buf)
+		bufPool.Put(pkt.buf[:maxPacketSize])
 		return pkt.n, pkt.addr, pkt.err
 	}
 }
 
-// Closes the filtered connection
+// Close closes the filtered connection, removing it's filters
 func (r *FilteredConn) Close() error {
-	r.mut.Lock()
-	defer r.mut.Unlock()
-	if r.closed {
-		return fmt.Errorf("use of closed connection")
+	if atomic.CompareAndSwapInt32(&r.closed, 0, 1) {
+		r.source.removeConn(r)
+		return nil
 	}
-	r.closed = true
-	r.source.removeConn(r)
-	return nil
+	return errClosed
 }

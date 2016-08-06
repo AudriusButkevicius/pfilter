@@ -1,6 +1,7 @@
 package pfilter
 
 import (
+	"fmt"
 	"net"
 	"sync"
 )
@@ -12,6 +13,7 @@ var (
 			return make([]byte, maxPacketSize)
 		},
 	}
+	errClosed = fmt.Errorf("use of closed network connection")
 )
 
 type timeoutError struct{}

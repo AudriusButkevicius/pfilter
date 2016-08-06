@@ -21,24 +21,24 @@ func NewPacketFilter(conn net.PacketConn) *PacketFilter {
 	d := &PacketFilter{
 		PacketConn: conn,
 	}
-	go d.run()
 	return d
 }
 
 // PacketFilter embeds a net.PacketConn to perform the filtering.
 type PacketFilter struct {
 	net.PacketConn
-	conns     []*FilteredConn
-	startOnce sync.Once
-	mut       sync.Mutex
 
-	dropped uint64
+	conns []*FilteredConn
+	mut   sync.Mutex
+
+	dropped  uint64
+	overflow uint64
 }
 
 // NewConn returns a new net.PacketConn object which filters packets based
 // on the provided filter. If filter is nil, the connection will receive all
 // packets. Priority decides which connection gets the ability to claim the packet.
-func (d *PacketFilter) NewConn(priority int, filter Filter) (net.PacketConn, error) {
+func (d *PacketFilter) NewConn(priority int, filter Filter) net.PacketConn {
 	conn := &FilteredConn{
 		priority:   priority,
 		source:     d,
@@ -49,7 +49,7 @@ func (d *PacketFilter) NewConn(priority int, filter Filter) (net.PacketConn, err
 	d.conns = append(d.conns, conn)
 	sort.Sort(filteredConnList(d.conns))
 	d.mut.Unlock()
-	return conn, nil
+	return conn
 }
 
 func (d *PacketFilter) removeConn(r *FilteredConn) {
@@ -78,12 +78,26 @@ func (d *PacketFilter) Dropped() uint64 {
 	return atomic.LoadUint64(&d.dropped)
 }
 
-func (d *PacketFilter) run() {
+// Overflow returns number of packets were dropped due to receive buffers being
+// full.
+func (d *PacketFilter) Overflow() uint64 {
+	return atomic.LoadUint64(&d.overflow)
+}
+
+// Start starts the packet filter.
+func (d *PacketFilter) Start() {
+	go d.loop()
+}
+
+func (d *PacketFilter) loop() {
 	var buf []byte
 next:
 	for {
 		buf = bufPool.Get().([]byte)
-		n, addr, err := d.ReadFrom(buf[:maxPacketSize])
+		n, addr, err := d.ReadFrom(buf)
+		if err != nil {
+			return
+		}
 		pkt := packet{
 			n:    n,
 			addr: addr,
@@ -96,7 +110,11 @@ next:
 		d.mut.Unlock()
 		for _, conn := range conns {
 			if conn.filter == nil || conn.filter.ClaimIncoming(pkt.buf, pkt.addr) {
-				conn.recvBuffer <- pkt
+				select {
+				case conn.recvBuffer <- pkt:
+				default:
+					atomic.AddUint64(&d.overflow, 1)
+				}
 				goto next
 			}
 		}
