@@ -19,7 +19,7 @@ type Filter interface {
 // connection.
 func NewPacketFilter(conn net.PacketConn) *PacketFilter {
 	d := &PacketFilter{
-		PacketConn: conn,
+		conn: conn,
 	}
 	return d
 }
@@ -30,7 +30,7 @@ type PacketFilter struct {
 	dropped  uint64
 	overflow uint64
 
-	net.PacketConn
+	conn net.PacketConn
 
 	conns []*FilteredConn
 	mut   sync.Mutex
@@ -96,7 +96,7 @@ func (d *PacketFilter) loop() {
 next:
 	for {
 		buf = bufPool.Get().([]byte)
-		n, addr, err := d.ReadFrom(buf)
+		n, addr, err := d.conn.ReadFrom(buf)
 		pkt := packet{
 			n:    n,
 			addr: addr,

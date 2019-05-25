@@ -22,7 +22,7 @@ type FilteredConn struct {
 
 // LocalAddr returns the local address
 func (r *FilteredConn) LocalAddr() net.Addr {
-	return r.source.LocalAddr()
+	return r.source.conn.LocalAddr()
 }
 
 // SetReadDeadline sets a read deadline
@@ -33,7 +33,7 @@ func (r *FilteredConn) SetReadDeadline(t time.Time) error {
 
 // SetWriteDeadline sets a write deadline
 func (r *FilteredConn) SetWriteDeadline(t time.Time) error {
-	return r.source.SetWriteDeadline(t)
+	return r.source.conn.SetWriteDeadline(t)
 }
 
 // SetDeadline sets a read and a write deadline
@@ -53,7 +53,7 @@ func (r *FilteredConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
 	if r.filter != nil {
 		r.filter.Outgoing(b, addr)
 	}
-	return r.source.WriteTo(b, addr)
+	return r.source.conn.WriteTo(b, addr)
 }
 
 // ReadFrom reads from the filtered connection
