@@ -76,9 +76,13 @@ func (r *FilteredConn) ReadFrom(b []byte) (n int, addr net.Addr, err error) {
 	case <-timeout:
 		return 0, nil, errTimeout
 	case pkt := <-r.recvBuffer:
-		copy(b[:pkt.n], pkt.buf)
+		n := pkt.n
+		if l := len(b); l < n {
+			n = l
+		}
+		copy(b, pkt.buf[:n])
 		bufPool.Put(pkt.buf[:maxPacketSize])
-		return pkt.n, pkt.addr, pkt.err
+		return n, pkt.addr, pkt.err
 	case <-r.closed:
 		return 0, nil, errClosed
 	}
