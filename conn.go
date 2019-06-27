@@ -76,24 +76,13 @@ func (r *FilteredConn) ReadFrom(b []byte) (n int, addr net.Addr, err error) {
 	case <-timeout:
 		return 0, nil, errTimeout
 	case pkt := <-r.recvBuffer:
-		capacity := cap(b)
-		if pkt.n <= capacity {
-			copy(b[:pkt.n], pkt.buf)
-			bufPool.Put(pkt.buf[:maxPacketSize])
-			return pkt.n, pkt.addr, pkt.err
-		} else {
-			copy(b[:capacity], pkt.buf[:capacity])
-			pkt.buf = pkt.buf[capacity:]
-			// Put the packet back into the receive queue. Delivery order does not matter supposedly.
-			select {
-			case r.recvBuffer <- pkt:
-			default:
-				// YOLO.
-			}
-
-			return capacity, pkt.addr, pkt.err
+		n := pkt.n
+		if cap(b) < n {
+			n = cap(b)
 		}
-
+		copy(b[:n], pkt.buf[:n])
+		bufPool.Put(pkt.buf[:maxPacketSize])
+		return n, pkt.addr, pkt.err
 	case <-r.closed:
 		return 0, nil, errClosed
 	}
