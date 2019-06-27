@@ -124,12 +124,13 @@ next:
 				select {
 				case conn.recvBuffer <- pkt:
 				default:
+					bufPool.Put(pkt.buf[:maxPacketSize])
 					atomic.AddUint64(&d.overflow, 1)
 				}
 				goto next
 			}
 		}
-
+		bufPool.Put(pkt.buf[:maxPacketSize])
 		atomic.AddUint64(&d.dropped, 1)
 	}
 }
