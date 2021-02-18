@@ -117,7 +117,7 @@ func (d *PacketFilter) loop() {
 		}
 
 		d.mut.Lock()
-		sent := d.sendPaketLocked(pkt)
+		sent := d.sendPacketLocked(pkt)
 		d.mut.Unlock()
 		if !sent {
 			atomic.AddUint64(&d.dropped, 1)
@@ -126,7 +126,7 @@ func (d *PacketFilter) loop() {
 	}
 }
 
-func (d *PacketFilter) sendPaketLocked(pkt packet) bool {
+func (d *PacketFilter) sendPacketLocked(pkt packet) bool {
 	for _, conn := range d.conns {
 		if conn.filter == nil || conn.filter.ClaimIncoming(pkt.buf, pkt.addr) {
 			select {
