@@ -132,7 +132,7 @@ func (d *PacketFilter) Overflow() uint64 {
 // Should call this after creating all the expected connections using NewConn, otherwise the packets
 // read will be dropped.
 func (d *PacketFilter) Start() {
-       go d.loop()
+	go d.loop()
 }
 
 func (d *PacketFilter) loop() {
