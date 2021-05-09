@@ -60,6 +60,9 @@ func NewPacketFilterWithConfig(config Config) (*PacketFilter, error) {
 			},
 		},
 	}
+	if oobConn, ok := d.conn.(oobPacketConn); ok {
+		d.oobConn = oobConn
+	}
 	return d, nil
 }
 
@@ -70,11 +73,12 @@ type PacketFilter struct {
 	overflow uint64
 
 	conn       net.PacketConn
+	oobConn    oobPacketConn
 	packetSize int
 	backlog    int
 	bufPool    sync.Pool
 
-	conns []*FilteredConn
+	conns []*filteredConn
 	mut   sync.Mutex
 }
 
@@ -82,7 +86,7 @@ type PacketFilter struct {
 // on the provided filter. If filter is nil, the connection will receive all
 // packets. Priority decides which connection gets the ability to claim the packet.
 func (d *PacketFilter) NewConn(priority int, filter Filter) net.PacketConn {
-	conn := &FilteredConn{
+	conn := &filteredConn{
 		priority:   priority,
 		source:     d,
 		recvBuffer: make(chan packet, d.backlog),
@@ -93,10 +97,13 @@ func (d *PacketFilter) NewConn(priority int, filter Filter) net.PacketConn {
 	d.conns = append(d.conns, conn)
 	sort.Sort(filteredConnList(d.conns))
 	d.mut.Unlock()
+	if d.oobConn != nil {
+		return &filteredConnObb{conn}
+	}
 	return conn
 }
 
-func (d *PacketFilter) removeConn(r *FilteredConn) {
+func (d *PacketFilter) removeConn(r *filteredConn) {
 	d.mut.Lock()
 	for i, conn := range d.conns {
 		if conn == r {
@@ -132,24 +139,47 @@ func (d *PacketFilter) Overflow() uint64 {
 // Should call this after creating all the expected connections using NewConn, otherwise the packets
 // read will be dropped.
 func (d *PacketFilter) Start() {
-	go d.loop()
+	pktReader := d.readFrom
+	if d.oobConn != nil {
+		pktReader = d.readMsgUdp
+	}
+	go d.loop(pktReader)
 }
 
-func (d *PacketFilter) loop() {
-	var buf []byte
+func (d *PacketFilter) readFrom() packet {
+	buf := d.bufPool.Get().([]byte)
+	n, addr, err := d.conn.ReadFrom(buf)
+
+	return packet{
+		n:    n,
+		addr: addr,
+		err:  err,
+		buf:  buf[:n],
+	}
+}
+
+func (d *PacketFilter) readMsgUdp() packet {
+	buf := d.bufPool.Get().([]byte)
+	oobBuf := d.bufPool.Get().([]byte)
+	n, oobn, flags, addr, err := d.oobConn.ReadMsgUDP(buf, oobBuf)
+
+	return packet{
+		n:       n,
+		oobn:    oobn,
+		flags:   flags,
+		addr:    addr,
+		udpAddr: addr,
+		err:     err,
+		buf:     buf[:n],
+		oobBuf:  oobBuf[:oobn],
+	}
+}
+
+func (d *PacketFilter) loop(pktReader func() packet) {
 	for {
-		buf = d.bufPool.Get().([]byte)
-		n, addr, err := d.conn.ReadFrom(buf)
-
-		pkt := packet{
-			n:    n,
-			addr: addr,
-			err:  err,
-			buf:  buf[:n],
-		}
-
-		if err != nil {
-			if nerr, ok := err.(net.Error); ok && nerr.Temporary() {
+		pkt := pktReader()
+		if pkt.err != nil {
+			if nerr, ok := pkt.err.(net.Error); ok && nerr.Temporary() {
 				continue
 			}
 			d.mut.Lock()
@@ -170,6 +200,9 @@ func (d *PacketFilter) loop() {
 		if !sent {
 			atomic.AddUint64(&d.dropped, 1)
 			d.bufPool.Put(pkt.buf[:d.packetSize])
+			if pkt.oobBuf != nil {
+				d.bufPool.Put(pkt.oobBuf[:d.packetSize])
+			}
 		}
 	}
 }
