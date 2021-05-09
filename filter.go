@@ -1,6 +1,7 @@
 package pfilter
 
 import (
+	"errors"
 	"net"
 	"sort"
 	"sync"
@@ -15,13 +16,51 @@ type Filter interface {
 	ClaimIncoming([]byte, net.Addr) bool
 }
 
+type Config struct {
+	Conn net.PacketConn
+
+	// Size of the byte array passed to the read operations of the underlying
+	// socket. Buffer that is too small could result in truncated reads. Defaults to 15000
+	BufferSize int
+
+	// Backlog of how many packets we are happy to buffer in memory
+	Backlog int
+}
+
 // NewPacketFilter creates a packet filter object wrapping the given packet
 // connection.
 func NewPacketFilter(conn net.PacketConn) *PacketFilter {
-	d := &PacketFilter{
-		conn: conn,
+	p, _ := NewPacketFilterWithConfig(Config{
+		Conn:       conn,
+		BufferSize: 1500,
+		Backlog:    256,
+	})
+	return p
+}
+
+// NewPacketFilterWithConfig creates a packet filter object with the configuration provided
+func NewPacketFilterWithConfig(config Config) (*PacketFilter, error) {
+	if config.Conn == nil {
+		return nil, errors.New("no connection provided")
 	}
-	return d
+	if config.BufferSize < 1 {
+		return nil, errors.New("invalid packet size")
+	}
+	if config.Backlog < 0 {
+		return nil, errors.New("negative backlog")
+	}
+
+	d := &PacketFilter{
+		conn:       config.Conn,
+		packetSize: config.BufferSize,
+		backlog:    config.Backlog,
+		bufPool: sync.Pool{
+			New: func() interface{} {
+				return make([]byte, config.BufferSize)
+			},
+		},
+	}
+	return d, nil
 }
 
 // PacketFilter embeds a net.PacketConn to perform the filtering.
@@ -30,7 +69,10 @@ type PacketFilter struct {
 	dropped  uint64
 	overflow uint64
 
-	conn net.PacketConn
+	conn       net.PacketConn
+	packetSize int
+	backlog    int
+	bufPool    sync.Pool
 
 	conns []*FilteredConn
 	mut   sync.Mutex
@@ -43,7 +85,7 @@ func (d *PacketFilter) NewConn(priority int, filter Filter) net.PacketConn {
 	conn := &FilteredConn{
 		priority:   priority,
 		source:     d,
-		recvBuffer: make(chan packet, 256),
+		recvBuffer: make(chan packet, d.backlog),
 		filter:     filter,
 		closed:     make(chan struct{}),
 	}
@@ -86,16 +128,19 @@ func (d *PacketFilter) Overflow() uint64 {
 	return atomic.LoadUint64(&d.overflow)
 }
 
-// Start starts the packet filter.
+// Start starts reading packets from the socket and forwarding them to connections.
+// Should call this after creating all the expected connections using NewConn, otherwise the packets
+// read will be dropped.
 func (d *PacketFilter) Start() {
-	go d.loop()
+       go d.loop()
 }
 
 func (d *PacketFilter) loop() {
 	var buf []byte
 	for {
-		buf = bufPool.Get().([]byte)
+		buf = d.bufPool.Get().([]byte)
 		n, addr, err := d.conn.ReadFrom(buf)
+
 		pkt := packet{
 			n:    n,
 			addr: addr,
@@ -104,6 +149,9 @@ func (d *PacketFilter) loop() {
 		}
 
 		if err != nil {
+			if nerr, ok := err.(net.Error); ok && nerr.Temporary() {
+				continue
+			}
 			d.mut.Lock()
 			for _, conn := range d.conns {
 				select {
@@ -121,8 +169,8 @@ func (d *PacketFilter) loop() {
 		d.mut.Unlock()
 		if !sent {
 			atomic.AddUint64(&d.dropped, 1)
+			d.bufPool.Put(pkt.buf[:d.packetSize])
 		}
-		bufPool.Put(pkt.buf[:maxPacketSize])
 	}
 }
 

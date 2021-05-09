@@ -2,16 +2,9 @@ package pfilter
 
 import (
 	"net"
-	"sync"
 )
 
 var (
-	maxPacketSize = 1500
-	bufPool       = sync.Pool{
-		New: func() interface{} {
-			return make([]byte, maxPacketSize)
-		},
-	}
 	errTimeout = &netError{
 		msg:       "i/o timeout",
 		timeout:   true,

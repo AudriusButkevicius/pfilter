@@ -41,8 +41,8 @@ func BenchmarkQuicPfilter(b *testing.B) {
 	defer server.Close()
 
 	pfilter := NewPacketFilter(server)
-	pfilter.Start()
 	pfilterServer := pfilter.NewConn(10, nil)
+	pfilter.Start()
 
 	quicServer := &wrapperConn{
 		PacketConn: pfilterServer,

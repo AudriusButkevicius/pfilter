@@ -1,6 +1,7 @@
 package pfilter
 
 import (
+	"io"
 	"net"
 	"sync/atomic"
 	"time"
@@ -77,12 +78,16 @@ func (r *FilteredConn) ReadFrom(b []byte) (n int, addr net.Addr, err error) {
 		return 0, nil, errTimeout
 	case pkt := <-r.recvBuffer:
 		n := pkt.n
+		err := pkt.err
 		if l := len(b); l < n {
 			n = l
+			if err == nil {
+				err = io.ErrShortBuffer
+			}
 		}
 		copy(b, pkt.buf[:n])
-		bufPool.Put(pkt.buf[:maxPacketSize])
-		return n, pkt.addr, pkt.err
+		r.source.bufPool.Put(pkt.buf[:r.source.packetSize])
+		return n, pkt.addr, err
 	case <-r.closed:
 		return 0, nil, errClosed
 	}

@@ -34,8 +34,8 @@ func BenchmarkPacketConnPfilter(b *testing.B) {
 	defer server.Close()
 
 	pfilter := NewPacketFilter(server)
-	pfilter.Start()
 	pfilterServer := pfilter.NewConn(10, nil)
+	pfilter.Start()
 
 	client, err := net.Dial("udp", server.LocalAddr().String())
 	if err != nil {
@@ -103,4 +103,39 @@ func recvMsg(c io.Reader, buf []byte) error {
 		}
 	}
 	return nil
+}
+
+func TestShortRead(t *testing.T) {
+	server, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Close()
+
+	client, err := net.Dial("udp", server.LocalAddr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	d := make([]byte, 1024)
+
+	rand.Read(d)
+
+	if err := sendMsg(client, d); err != nil {
+		t.Fatal(err)
+	}
+
+	small := make([]byte, 32)
+
+	n, _, err := server.ReadFrom(small)
+	if err == nil {
+		t.Error("expected read to fail")
+	}
+	if n != 32 {
+		t.Error("unexpected read", n)
+	}
+	if nerr, ok := err.(net.Error); !ok || nerr.Temporary() {
+		t.Error("unexpected error condition", ok, nerr.Temporary())
+	}
 }
