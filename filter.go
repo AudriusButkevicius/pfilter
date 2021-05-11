@@ -149,30 +149,39 @@ func (d *PacketFilter) Start() {
 func (d *PacketFilter) readFrom() packet {
 	buf := d.bufPool.Get().([]byte)
 	n, addr, err := d.conn.ReadFrom(buf)
-
-	return packet{
+	pkt := packet{
 		n:    n,
 		addr: addr,
 		err:  err,
-		buf:  buf[:n],
 	}
+	if err != nil {
+		d.bufPool.Put(buf)
+		return pkt
+	}
+	pkt.buf = buf[:n]
+	return pkt
 }
 
 func (d *PacketFilter) readMsgUdp() packet {
 	buf := d.bufPool.Get().([]byte)
 	oobBuf := d.bufPool.Get().([]byte)
 	n, oobn, flags, addr, err := d.oobConn.ReadMsgUDP(buf, oobBuf)
-
-	return packet{
+	pkt := packet{
 		n:       n,
 		oobn:    oobn,
 		flags:   flags,
 		addr:    addr,
 		udpAddr: addr,
 		err:     err,
-		buf:     buf[:n],
-		oobBuf:  oobBuf[:oobn],
 	}
+	if err != nil {
+		d.bufPool.Put(buf)
+		d.bufPool.Put(oobBuf)
+		return pkt
+	}
+	pkt.buf = buf[:n]
+	pkt.oobBuf = oobBuf[:oobn]
+	return pkt
 }
 
 func (d *PacketFilter) loop(pktReader func() packet) {
