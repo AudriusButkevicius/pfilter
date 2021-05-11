@@ -158,10 +158,26 @@ func (d *PacketFilter) readFrom() packet {
 	}
 }
 
+var errUnexpectedNegativeLength = errors.New("ReadMsgUDP returned a negative number of read bytes")
+
 func (d *PacketFilter) readMsgUdp() packet {
 	buf := d.bufPool.Get().([]byte)
 	oobBuf := d.bufPool.Get().([]byte)
 	n, oobn, flags, addr, err := d.oobConn.ReadMsgUDP(buf, oobBuf)
+
+	// This is entirely unexpected, but happens in the wild
+	if n < 0 {
+		if err == nil {
+			err = errUnexpectedNegativeLength
+		}
+		n = 0
+	}
+	if oobn < 0 {
+		if err == nil {
+			err = errUnexpectedNegativeLength
+		}
+		oobn = 0
+	}
 
 	return packet{
 		n:       n,
