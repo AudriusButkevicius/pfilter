@@ -4,6 +4,7 @@ import (
 	"io"
 	"math/rand"
 	"net"
+	"runtime"
 	"sync"
 	"testing"
 )
@@ -106,6 +107,10 @@ func recvMsg(c io.Reader, buf []byte) error {
 }
 
 func TestShortRead(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("seems this is only true on windows")
+	}
+
 	server, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
