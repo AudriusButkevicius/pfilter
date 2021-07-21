@@ -11,4 +11,4 @@ require (
 	golang.org/x/tools v0.1.5 // indirect
 )
 
-replace github.com/lucas-clemente/quic-go v0.21.2-0.20210715202302-4e166bbb8d92 => github.com/AudriusButkevicius/quic-go v0.7.1-0.20210720145218-e1a0b2be14e3
+replace github.com/lucas-clemente/quic-go v0.21.2-0.20210715202302-4e166bbb8d92 => github.com/AudriusButkevicius/quic-go v0.7.1-0.20210721142424-a7ba3d6a10a6

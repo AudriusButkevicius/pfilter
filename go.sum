@@ -9,6 +9,8 @@ dmitri.shuralyov.com/state v0.0.0-20180228185332-28bcc343414c/go.mod h1:0PRwlb0D
 git.apache.org/thrift.git v0.0.0-20180902110319-2566ecd5d999/go.mod h1:fPE2ZNJGynbRyZ4dJvy6G277gSllfV2HJqblrnkyeyg=
 github.com/AudriusButkevicius/quic-go v0.7.1-0.20210720145218-e1a0b2be14e3 h1:jZldq51OWjQtMX+o4QcVJV7FrSANtUxbqoPJqP32gGY=
 github.com/AudriusButkevicius/quic-go v0.7.1-0.20210720145218-e1a0b2be14e3/go.mod h1:vF5M1XqhBAHgbjKcJOXY3JZz3GP0T3FQhz/uyOUS38Q=
+github.com/AudriusButkevicius/quic-go v0.7.1-0.20210721142424-a7ba3d6a10a6 h1:TmZjL2ehOiBBuZymPOassZUlLLhMaONUIUKt6aSuvY8=
+github.com/AudriusButkevicius/quic-go v0.7.1-0.20210721142424-a7ba3d6a10a6/go.mod h1:vF5M1XqhBAHgbjKcJOXY3JZz3GP0T3FQhz/uyOUS38Q=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/anmitsu/go-shlex v0.0.0-20161002113705-648efa622239/go.mod h1:2FmKhYUyUczH0OGQWaF5ceTx0UBShxjsH6f8oGKYe2c=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
