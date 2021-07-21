@@ -1,11 +1,11 @@
 package pfilter
 
 import (
-	"fmt"
 	"golang.org/x/net/ipv4"
 	"io"
 	"net"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -98,7 +98,6 @@ func (r *filteredConn) ReadFrom(b []byte) (n int, addr net.Addr, err error) {
 }
 
 func (r *filteredConn) ReadBatch(ms []ipv4.Message, flags int) (int, error) {
-	fmt.Println("batch read", len(ms), flags)
 	if flags != 0 {
 		return 0, errNotSupported
 	}
@@ -183,4 +182,23 @@ func (r *filteredConn) Close() error {
 	close(r.closed)
 	r.source.removeConn(r)
 	return nil
+}
+
+func (r *filteredConn) SetReadBuffer(sz int) error {
+	if srb, ok := r.source.conn.(interface{ SetReadBuffer(int) error }); ok {
+		return srb.SetReadBuffer(sz)
+	}
+	return errNotSupported
+}
+
+func (r *filteredConn) SyscallConn() (syscall.RawConn, error) {
+	if r.source.oobConn != nil {
+		return r.source.oobConn.SyscallConn()
+	}
+	if scon, ok := r.source.conn.(interface {
+		SyscallConn() (syscall.RawConn, error)
+	}); ok {
+		return scon.SyscallConn()
+	}
+	return nil, errNotSupported
 }

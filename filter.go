@@ -2,7 +2,6 @@ package pfilter
 
 import (
 	"errors"
-	"fmt"
 	"github.com/lucas-clemente/quic-go"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
@@ -51,7 +50,6 @@ func NewPacketFilter(conn net.PacketConn) *PacketFilter {
 	case "freebsd", "darwin":
 		batchSize = 1
 	}
-	fmt.Println("batch size", batchSize)
 	p, _ := NewPacketFilterWithConfig(Config{
 		Conn:       conn,
 		BufferSize: 1500,
@@ -194,7 +192,6 @@ func (d *PacketFilter) readFrom() []messageWithError {
 }
 
 func (d *PacketFilter) readBatch() []messageWithError {
-	fmt.Println("raed batch allocated")
 	batch := make([]ipv4.Message, d.batchSize)
 	for i := range batch {
 		buf := d.bufPool.Get().([]byte)
@@ -203,9 +200,7 @@ func (d *PacketFilter) readBatch() []messageWithError {
 		batch[i].OOB = oobBuf
 	}
 
-	fmt.Println("read batch before call")
 	n, err := d.ipv4Conn.ReadBatch(batch, 0)
-	fmt.Println("read batch after call", n, err)
 
 	if err != nil {
 		// Pretend we've read one message, so we reuse the first message of the batch for error
@@ -223,7 +218,7 @@ func (d *PacketFilter) readBatch() []messageWithError {
 	for _, msg := range batch[n:] {
 		d.returnBuffers(msg)
 	}
-	fmt.Println("returning", len(result), result[0])
+
 	return result
 }
 
@@ -272,12 +267,10 @@ func (d *PacketFilter) loop(msgReader func() []messageWithError) {
 					continue
 				}
 				d.mut.Lock()
-				fmt.Println("returning errors", len(d.conns))
 				for _, conn := range d.conns {
 					select {
 					case conn.recvBuffer <- msg.Copy(&d.bufPool):
 					default:
-						fmt.Println("dropped")
 						atomic.AddUint64(&d.overflow, 1)
 					}
 				}

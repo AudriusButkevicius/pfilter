@@ -1,11 +1,9 @@
 package pfilter
 
 import (
-	"errors"
 	"github.com/lucas-clemente/quic-go"
 	"io"
 	"net"
-	"syscall"
 	"time"
 )
 
@@ -13,18 +11,6 @@ var _ quic.OOBCapablePacketConn = (*filteredConnObb)(nil)
 
 type filteredConnObb struct {
 	*filteredConn
-}
-
-func (r *filteredConnObb) SyscallConn() (syscall.RawConn, error) {
-	if r.source.oobConn != nil {
-		return r.source.oobConn.SyscallConn()
-	}
-	if scon, ok := r.source.conn.(interface{
-		SyscallConn() (syscall.RawConn, error)
-	}); ok {
-		return scon.SyscallConn()
-	}
-	return nil, errors.New("doesn't have a SyscallConn")
 }
 
 func (r *filteredConnObb) WriteMsgUDP(b, oob []byte, addr *net.UDPAddr) (n, oobn int, err error) {
