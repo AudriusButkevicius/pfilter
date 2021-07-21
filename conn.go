@@ -1,6 +1,8 @@
 package pfilter
 
 import (
+	"fmt"
+	"golang.org/x/net/ipv4"
 	"io"
 	"net"
 	"sync/atomic"
@@ -14,7 +16,7 @@ type filteredConn struct {
 	source   *PacketFilter
 	priority int
 
-	recvBuffer chan packet
+	recvBuffer chan messageWithError
 
 	filter Filter
 
@@ -76,24 +78,99 @@ func (r *filteredConn) ReadFrom(b []byte) (n int, addr net.Addr, err error) {
 	select {
 	case <-timeout:
 		return 0, nil, errTimeout
-	case pkt := <-r.recvBuffer:
-		n := pkt.n
-		err := pkt.err
+	case msg := <-r.recvBuffer:
+		n := msg.N
+		err := msg.Err
 		if l := len(b); l < n {
 			n = l
 			if err == nil {
 				err = io.ErrShortBuffer
 			}
 		}
-		copy(b, pkt.buf[:n])
-		r.source.bufPool.Put(pkt.buf[:r.source.packetSize])
-		if pkt.oobBuf != nil {
-			r.source.bufPool.Put(pkt.oobBuf[:r.source.packetSize])
-		}
-		return n, pkt.addr, err
+		copy(b, msg.Buffers[0][:n])
+
+		r.source.returnBuffers(msg.Message)
+
+		return n, msg.Addr, err
 	case <-r.closed:
 		return 0, nil, errClosed
 	}
+}
+
+func (r *filteredConn) ReadBatch(ms []ipv4.Message, flags int) (int, error) {
+	fmt.Println("batch read", len(ms), flags)
+	if flags != 0 {
+		return 0, errNotSupported
+	}
+
+	select {
+	case <-r.closed:
+		return 0, errClosed
+	default:
+	}
+
+	var timeout <-chan time.Time
+
+	if deadline, ok := r.deadline.Load().(time.Time); ok && !deadline.IsZero() {
+		timer := time.NewTimer(deadline.Sub(time.Now()))
+		timeout = timer.C
+		defer timer.Stop()
+	}
+
+	var msgs []messageWithError
+
+	defer func() {
+		for _, msg := range msgs {
+			r.source.returnBuffers(msg.Message)
+		}
+	}()
+
+loop:
+	for {
+		select {
+		case <-timeout:
+			break loop
+		case msg := <-r.recvBuffer:
+			msgs = append(msgs, msg)
+			if msg.Err != nil {
+				return 0, msg.Err
+			}
+			if len(msgs) == len(ms) {
+				break loop
+			}
+		case <-r.closed:
+			return 0, errClosed
+		}
+	}
+
+	if len(msgs) == 0 {
+		return 0, errTimeout
+	}
+
+	for i, msg := range msgs {
+		mn := ms[i]
+		if len(mn.Buffers) != 1 {
+			return 0, errNotSupported
+		}
+		if len(mn.Buffers[0]) < len(msg.Buffers[0]) {
+			return 0, io.ErrShortBuffer
+		}
+
+		mn.N = msg.N
+		mn.NN = msg.NN
+		mn.Flags = msg.Flags
+		mn.Addr = msg.Addr
+
+		copy(mn.Buffers[0], msg.Buffers[0][:msg.N])
+
+		if oobl := len(mn.OOB); oobl < mn.NN {
+			mn.NN = oobl
+		}
+		if mn.NN > 0 {
+			copy(mn.OOB, msg.OOB[:msg.NN])
+		}
+	}
+	return len(msgs), nil
 }
 
 // Close closes the filtered connection, removing it's filters

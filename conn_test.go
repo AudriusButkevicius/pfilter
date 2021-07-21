@@ -50,7 +50,6 @@ func BenchmarkPacketConnPfilter(b *testing.B) {
 func benchmark(b *testing.B, client io.Writer, server io.Reader, sz int) {
 	data := make([]byte, sz)
 	if _, err := rand.Read(data); err != nil {
-
 		b.Fatal(err)
 	}
 
@@ -60,17 +59,17 @@ func benchmark(b *testing.B, client io.Writer, server io.Reader, sz int) {
 	for i := 0; i < b.N; i++ {
 		wg.Add(2)
 		go func() {
+			defer wg.Done()
 			if err := sendMsg(client, data); err != nil {
 				b.Fatal(err)
 			}
-			wg.Done()
 		}()
 		go func() {
+			defer wg.Done()
 			if err := recvMsg(server, data); err != nil {
 				b.Fatal(err)
 			}
 			total += sz
-			wg.Done()
 		}()
 		wg.Wait()
 	}
@@ -89,8 +88,11 @@ func (r *readerWrapper) Read(buf []byte) (int, error) {
 
 func sendMsg(c io.Writer, buf []byte) error {
 	n, err := c.Write(buf)
-	if n != len(buf) || err != nil {
+	if err != nil{
 		return err
+	}
+	if n != len(buf) {
+		return io.ErrShortWrite
 	}
 	return nil
 }

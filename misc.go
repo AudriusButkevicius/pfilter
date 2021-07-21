@@ -1,7 +1,9 @@
 package pfilter
 
 import (
+	"golang.org/x/net/ipv4"
 	"net"
+	"sync"
 )
 
 var (
@@ -12,6 +14,11 @@ var (
 	}
 	errClosed = &netError{
 		msg:       "use of closed network connection",
+		timeout:   false,
+		temporary: false,
+	}
+	errNotSupported = &netError{
+		msg:       "not supported",
 		timeout:   false,
 		temporary: false,
 	}
@@ -36,13 +43,29 @@ func (r filteredConnList) Len() int           { return len(r) }
 func (r filteredConnList) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
 func (r filteredConnList) Less(i, j int) bool { return r[i].priority < r[j].priority }
 
-type packet struct {
-	n       int
-	oobn    int
-	flags   int
-	addr    net.Addr
-	udpAddr *net.UDPAddr
-	err     error
-	buf     []byte
-	oobBuf  []byte
+type messageWithError struct {
+	ipv4.Message
+	Err error
+}
+
+func (m *messageWithError) Copy(pool *sync.Pool) messageWithError {
+	buf := pool.Get().([]byte)
+	oobBuf := pool.Get().([]byte)
+
+	copy(buf, m.Buffers[0][:m.N])
+	if m.NN > 0 {
+		copy(oobBuf, m.OOB[:m.NN])
+	}
+
+	return messageWithError{
+		Message: ipv4.Message{
+			Buffers: [][]byte{buf[:m.N]},
+			OOB:     oobBuf[:m.NN],
+			Addr:    m.Addr,
+			N:       m.N,
+			NN:      m.NN,
+			Flags:   m.Flags,
+		},
+		Err: m.Err,
+	}
 }
