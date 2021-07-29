@@ -158,7 +158,7 @@ loop:
 		if len(ms[i].Buffers) != 1 {
 			return 0, errNotSupported
 		}
-		if len(ms[i].Buffers[0]) < len(msg.Buffers[0]) {
+		if len(ms[i].Buffers[0]) < msg.N {
 			return 0, io.ErrShortBuffer
 		}
 
