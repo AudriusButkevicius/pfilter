@@ -125,26 +125,35 @@ func (r *filteredConn) ReadBatch(ms []ipv4.Message, flags int) (int, error) {
 		}
 	}()
 
+	// We must read at least one message.
+	select {
+	//goland:noinspection GoNilness
+	case <-timeout:
+		return 0, errTimeout
+	case msg := <-r.recvBuffer:
+		msgs = append(msgs, msg)
+		if msg.Err != nil {
+			return 0, msg.Err
+		}
+	case <-r.closed:
+		return 0, errClosed
+	}
+
+	// After that, it's best effort. If there are messages, we read them.
+	// If not, we break out and return what we got.
 loop:
-	for {
+	for len(msgs) != len(ms) {
 		select {
-		case <-timeout:
-			break loop
 		case msg := <-r.recvBuffer:
 			msgs = append(msgs, msg)
 			if msg.Err != nil {
 				return 0, msg.Err
 			}
-			if len(msgs) == len(ms) {
-				break loop
-			}
 		case <-r.closed:
 			return 0, errClosed
+		default:
+			break loop
 		}
-	}
-
-	if len(msgs) == 0 {
-		return 0, errTimeout
 	}
 
 	for i, msg := range msgs {
