@@ -1,12 +1,13 @@
 package pfilter
 
 import (
-	"golang.org/x/net/ipv4"
 	"io"
 	"net"
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"golang.org/x/net/ipv4"
 )
 
 type filteredConn struct {

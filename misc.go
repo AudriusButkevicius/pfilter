@@ -1,9 +1,10 @@
 package pfilter
 
 import (
-	"golang.org/x/net/ipv4"
 	"net"
 	"sync"
+
+	"golang.org/x/net/ipv4"
 )
 
 var (

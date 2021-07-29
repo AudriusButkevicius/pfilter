@@ -2,14 +2,15 @@ package pfilter
 
 import (
 	"errors"
-	"github.com/lucas-clemente/quic-go"
-	"golang.org/x/net/ipv4"
-	"golang.org/x/net/ipv6"
 	"net"
 	"runtime"
 	"sort"
 	"sync"
 	"sync/atomic"
+
+	"github.com/lucas-clemente/quic-go"
+	"golang.org/x/net/ipv4"
+	"golang.org/x/net/ipv6"
 )
 
 // These are both the same, socket.Message, just have type aliases.

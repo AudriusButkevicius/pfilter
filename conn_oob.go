@@ -1,10 +1,11 @@
 package pfilter
 
 import (
-	"github.com/lucas-clemente/quic-go"
 	"io"
 	"net"
 	"time"
+
+	"github.com/lucas-clemente/quic-go"
 )
 
 var _ quic.OOBCapablePacketConn = (*filteredConnObb)(nil)
