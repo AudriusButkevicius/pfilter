@@ -169,13 +169,13 @@ func (d *PacketFilter) Overflow() uint64 {
 // Should call this after creating all the expected connections using NewConn, otherwise the packets
 // read will be dropped.
 func (d *PacketFilter) Start() {
-	pktReader := d.readFrom
-	if d.batchSize > 0 {
-		pktReader = d.readBatch
+	msgReader := d.readFrom
+	if d.ipv4Conn != nil {
+		msgReader = d.readBatch
 	} else if d.oobConn != nil {
-		pktReader = d.readMsgUdp
+		msgReader = d.readMsgUdp
 	}
-	go d.loop(pktReader)
+	go d.loop(msgReader)
 }
 
 func (d *PacketFilter) readFrom() []messageWithError {
