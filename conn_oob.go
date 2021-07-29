@@ -57,7 +57,12 @@ func (r *filteredConnObb) ReadMsgUDP(b, oob []byte) (n, oobn, flags int, addr *n
 
 		r.source.returnBuffers(msg.Message)
 
-		return n, oobn, msg.Flags, msg.Addr.(*net.UDPAddr), err
+		udpAddr, ok := msg.Addr.(*net.UDPAddr)
+		if !ok && err == nil {
+			err = errNotSupported
+		}
+
+		return n, oobn, msg.Flags, udpAddr, err
 	case <-r.closed:
 		return 0, 0, 0, nil, errClosed
 	}

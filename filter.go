@@ -83,7 +83,9 @@ func NewPacketFilterWithConfig(config Config) (*PacketFilter, error) {
 		},
 	}
 	if config.BatchSize > 0 {
-		d.ipv4Conn = ipv4.NewPacketConn(config.Conn)
+		if _, ok := config.Conn.(*net.UDPConn); ok {
+			d.ipv4Conn = ipv4.NewPacketConn(config.Conn)
+		}
 	}
 	if oobConn, ok := d.conn.(quic.OOBCapablePacketConn); ok {
 		d.oobConn = oobConn
@@ -201,6 +203,11 @@ func (d *PacketFilter) readBatch() []messageWithError {
 	}
 
 	n, err := d.ipv4Conn.ReadBatch(batch, 0)
+
+	// This is entirely unexpected, but happens in the wild
+	if n < 0 && err == nil {
+		err = errUnexpectedNegativeLength
+	}
 
 	if err != nil {
 		// Pretend we've read one message, so we reuse the first message of the batch for error

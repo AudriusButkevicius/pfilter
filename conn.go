@@ -147,26 +147,27 @@ loop:
 	}
 
 	for i, msg := range msgs {
-		mn := ms[i]
-		if len(mn.Buffers) != 1 {
+		if len(ms[i].Buffers) != 1 {
 			return 0, errNotSupported
 		}
-		if len(mn.Buffers[0]) < len(msg.Buffers[0]) {
+		if len(ms[i].Buffers[0]) < len(msg.Buffers[0]) {
 			return 0, io.ErrShortBuffer
 		}
 
-		mn.N = msg.N
-		mn.NN = msg.NN
-		mn.Flags = msg.Flags
-		mn.Addr = msg.Addr
+		ms[i].N = msg.N
+		ms[i].NN = msg.NN
+		ms[i].Flags = msg.Flags
+		ms[i].Addr = msg.Addr
 
-		copy(mn.Buffers[0], msg.Buffers[0][:msg.N])
+		copy(ms[i].Buffers[0], msg.Buffers[0][:msg.N])
 
-		if oobl := len(mn.OOB); oobl < mn.NN {
-			mn.NN = oobl
+		// Truncate OOB data.
+		if oobl := len(ms[i].OOB); oobl < ms[i].NN {
+			ms[i].NN = oobl
 		}
-		if mn.NN > 0 {
-			copy(mn.OOB, msg.OOB[:msg.NN])
+
+		if ms[i].NN > 0 {
+			copy(ms[i].OOB, msg.OOB[:msg.NN])
 		}
 	}
 	return len(msgs), nil

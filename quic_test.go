@@ -12,7 +12,6 @@ import (
 	"encoding/pem"
 	"math/big"
 	"net"
-	"syscall"
 	"testing"
 	"time"
 
@@ -44,12 +43,7 @@ func BenchmarkQuicPfilter(b *testing.B) {
 	pfilterServer := pfilter.NewConn(10, nil)
 	pfilter.Start()
 
-	quicServer := &wrapperConn{
-		PacketConn: pfilterServer,
-		underlying: server.(*net.UDPConn),
-	}
-
-	writer, reader := wrapQuic(quicServer)
+	writer, reader := wrapQuic(pfilterServer)
 
 	benchmark(b, writer, reader, quicSize)
 }
@@ -153,17 +147,4 @@ func cert() (tls.Certificate, error) {
 	}
 
 	return tls.X509KeyPair(certOut.Bytes(), keyOut.Bytes())
-}
-
-type wrapperConn struct {
-	net.PacketConn
-	underlying *net.UDPConn
-}
-
-func (s *wrapperConn) SetReadBuffer(size int) error {
-	return s.underlying.SetReadBuffer(size)
-}
-
-func (s *wrapperConn) SyscallConn() (syscall.RawConn, error) {
-	return s.underlying.SyscallConn()
 }

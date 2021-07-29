@@ -88,7 +88,7 @@ func (r *readerWrapper) Read(buf []byte) (int, error) {
 
 func sendMsg(c io.Writer, buf []byte) error {
 	n, err := c.Write(buf)
-	if err != nil{
+	if err != nil {
 		return err
 	}
 	if n != len(buf) {
