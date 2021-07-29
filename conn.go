@@ -103,10 +103,8 @@ func (r *filteredConn) ReadBatch(ms []ipv4.Message, flags int) (int, error) {
 		return 0, errNotSupported
 	}
 
-	select {
-	case <-r.closed:
-		return 0, errClosed
-	default:
+	if len(ms) == 0 {
+		return 0, nil
 	}
 
 	var timeout <-chan time.Time
@@ -172,7 +170,7 @@ loop:
 		copy(ms[i].Buffers[0], msg.Buffers[0][:msg.N])
 
 		// Truncate OOB data.
-		if oobl := len(ms[i].OOB); oobl < ms[i].NN {
+		if oobl := len(ms[i].OOB); oobl < msg.NN {
 			ms[i].NN = oobl
 		}
 
@@ -180,6 +178,7 @@ loop:
 			copy(ms[i].OOB, msg.OOB[:msg.NN])
 		}
 	}
+
 	return len(msgs), nil
 }
 
