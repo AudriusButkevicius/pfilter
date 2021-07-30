@@ -80,15 +80,7 @@ func (r *filteredConn) ReadFrom(b []byte) (n int, addr net.Addr, err error) {
 	case <-timeout:
 		return 0, nil, errTimeout
 	case msg := <-r.recvBuffer:
-		n := msg.N
-		err := msg.Err
-		if l := len(b); l < n {
-			n = l
-			if err == nil {
-				err = io.ErrShortBuffer
-			}
-		}
-		copy(b, msg.Buffers[0][:n])
+		n, _, err := copyBuffers(msg, b, nil)
 
 		r.source.returnBuffers(msg.Message)
 
@@ -158,28 +150,42 @@ loop:
 		if len(ms[i].Buffers) != 1 {
 			return 0, errNotSupported
 		}
-		if len(ms[i].Buffers[0]) < msg.N {
-			return 0, io.ErrShortBuffer
+
+		n, nn, err := copyBuffers(msg, ms[i].Buffers[0], ms[i].OOB)
+		if err != nil {
+			return 0, err
 		}
 
-		ms[i].N = msg.N
-		ms[i].NN = msg.NN
+		ms[i].N = n
+		ms[i].N = nn
 		ms[i].Flags = msg.Flags
 		ms[i].Addr = msg.Addr
-
-		copy(ms[i].Buffers[0], msg.Buffers[0][:msg.N])
-
-		// Truncate OOB data.
-		if oobl := len(ms[i].OOB); oobl < msg.NN {
-			ms[i].NN = oobl
-		}
-
-		if ms[i].NN > 0 {
-			copy(ms[i].OOB, msg.OOB[:msg.NN])
-		}
 	}
 
 	return len(msgs), nil
+}
+
+func copyBuffers(msg messageWithError, buf, oobBuf []byte) (n, nn int, err error) {
+	if msg.Err != nil {
+		return 0, 0, msg.Err
+	}
+
+	if len(buf) < msg.N {
+		return 0, 0, io.ErrShortBuffer
+	}
+
+	copy(buf, msg.Buffers[0][:msg.N])
+
+	// Truncate, probably?
+	oobn := msg.NN
+	if oobl := len(oobBuf); oobl < oobn {
+		oobn = oobl
+	}
+	if oobn > 0 {
+		copy(oobBuf, msg.OOB[:oobn])
+	}
+
+	return msg.N, oobn, nil
 }
 
 // Close closes the filtered connection, removing it's filters

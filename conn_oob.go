@@ -1,7 +1,6 @@
 package pfilter
 
 import (
-	"io"
 	"net"
 	"time"
 
@@ -37,24 +36,7 @@ func (r *filteredConnObb) ReadMsgUDP(b, oob []byte) (n, oobn, flags int, addr *n
 	case <-timeout:
 		return 0, 0, 0, nil, errTimeout
 	case msg := <-r.recvBuffer:
-		err := msg.Err
-
-		n := msg.N
-		if l := len(b); l < n {
-			n = l
-			if err == nil {
-				err = io.ErrShortBuffer
-			}
-		}
-		copy(b, msg.Buffers[0][:n])
-
-		oobn := msg.NN
-		if oobl := len(oob); oobl < oobn {
-			oobn = oobl
-		}
-		if oobn > 0 {
-			copy(oob, msg.OOB[:oobn])
-		}
+		n, nn, err := copyBuffers(msg, b, oob)
 
 		r.source.returnBuffers(msg.Message)
 
@@ -63,7 +45,7 @@ func (r *filteredConnObb) ReadMsgUDP(b, oob []byte) (n, oobn, flags int, addr *n
 			err = errNotSupported
 		}
 
-		return n, oobn, msg.Flags, udpAddr, err
+		return n, nn, msg.Flags, udpAddr, err
 	case <-r.closed:
 		return 0, 0, 0, nil, errClosed
 	}
