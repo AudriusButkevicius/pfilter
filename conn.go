@@ -107,7 +107,7 @@ func (r *filteredConn) ReadBatch(ms []ipv4.Message, flags int) (int, error) {
 		defer timer.Stop()
 	}
 
-	var msgs []messageWithError
+	msgs := make([]messageWithError, 0, len(ms))
 
 	defer func() {
 		for _, msg := range msgs {
@@ -157,7 +157,7 @@ loop:
 		}
 
 		ms[i].N = n
-		ms[i].N = nn
+		ms[i].NN = nn
 		ms[i].Flags = msg.Flags
 		ms[i].Addr = msg.Addr
 	}
