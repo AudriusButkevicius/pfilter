@@ -8,12 +8,13 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/lucas-clemente/quic-go"
+	"github.com/quic-go/quic-go"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
 )
 
 // These are both the same, socket.Message, just have type aliases.
+//
 //goland:noinspection GoVarAndConstTypeMayBeOmitted
 var _ ipv4.Message = ipv6.Message{}
 
