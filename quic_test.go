@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lucas-clemente/quic-go"
 	"github.com/pkg/errors"
+	"github.com/quic-go/quic-go"
 )
 
 const quicSize = 5 << 20
@@ -65,7 +65,7 @@ func wrapQuic(server net.PacketConn) (quic.Stream, quic.Stream) {
 
 	qcfg := &quic.Config{
 		ConnectionIDLength: 4,
-		KeepAlive:          true,
+		KeepAlivePeriod:    15 * time.Second,
 	}
 
 	l, err := quic.Listen(server, tlsCfg, qcfg)

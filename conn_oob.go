@@ -4,7 +4,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/lucas-clemente/quic-go"
+	"github.com/quic-go/quic-go"
 )
 
 var _ quic.OOBCapablePacketConn = (*filteredConnObb)(nil)
