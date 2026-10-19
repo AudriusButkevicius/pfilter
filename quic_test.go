@@ -48,7 +48,7 @@ func BenchmarkQuicPfilter(b *testing.B) {
 	benchmark(b, writer, reader, quicSize)
 }
 
-func wrapQuic(server net.PacketConn) (quic.Stream, quic.Stream) {
+func wrapQuic(server net.PacketConn) (*quic.Stream, *quic.Stream) {
 	tlsCfg := &tls.Config{
 		// TLS 1.3 is the minimum we accept
 		MinVersion: tls.VersionTLS13,
@@ -64,13 +64,12 @@ func wrapQuic(server net.PacketConn) (quic.Stream, quic.Stream) {
 	tlsCfg.InsecureSkipVerify = true
 
 	qcfg := &quic.Config{
-		ConnectionIDLength: 4,
-		KeepAlivePeriod:    15 * time.Second,
+		KeepAlivePeriod: 15 * time.Second,
 	}
 
 	l, err := quic.Listen(server, tlsCfg, qcfg)
 
-	cses, err := quic.DialAddr(l.Addr().String(), tlsCfg, qcfg)
+	cses, err := quic.DialAddr(context.TODO(), l.Addr().String(), tlsCfg, qcfg)
 	if err != nil {
 		panic(err)
 	}
