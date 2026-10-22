@@ -4,32 +4,31 @@ on:
   push:
     branches: [ master ]
   pull_request:
-    branches: [ master ]
+
+permissions:
+  contents: read
 
 jobs:
-
   build:
-
-    strategy:
-      matrix:
-        go:
-          - "1.19"
-          - "1.20"
-
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v7
 
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v7
       with:
-        go-version: ${{ matrix.go }}
+        go-version: '1.27.x'
+        check-latest: true
 
     - name: Build
       run: go build -v ./...
 
-    - name: Test
-      run: go test -v ./...
+    - name: Vet
+      run: go vet ./...
 
-    - name: Bench
-      run: go test -bench=. -v ./...
+    - name: Test
+      run: go test -race -v ./...
+
+    - name: Benchmarks
+      run: go test -race -run '^$' -bench=. -benchtime=1x -timeout=2m ./...
