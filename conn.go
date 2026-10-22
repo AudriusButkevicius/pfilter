@@ -19,6 +19,8 @@ type filteredConn struct {
 
 	recvBuffer chan messageWithError
 
+	receiver atomic.Pointer[func([]byte, net.Addr, error)]
+
 	filter Filter
 
 	closed chan struct{}
@@ -217,4 +219,28 @@ func (r *filteredConn) SyscallConn() (syscall.RawConn, error) {
 		return scon.SyscallConn()
 	}
 	return nil, errNotSupported
+}
+
+// PacketReceiver is implemented by connections returned by NewConn. It allows
+// consumers to process packets without a goroutine calling ReadFrom.
+type PacketReceiver interface {
+	net.PacketConn
+	SetPacketReceiver(func(b []byte, addr net.Addr, err error))
+}
+
+// SetPacketReceiver makes the filter hand every packet claimed by this
+// connection to fn on its read goroutine, instead of queueing it for
+// ReadFrom. Set it before Start to receive all packets this way. fn must not
+// retain b after returning or block the read goroutine; it may close its own
+// connection. A terminal read error reaches fn with a nil buffer.
+//
+// A nil fn restores queueing for subsequent packets. Replacing fn is safe
+// concurrently with reads, but an in-flight call may still use the old fn.
+// Packets already queued remain available through ReadFrom.
+func (r *filteredConn) SetPacketReceiver(fn func(b []byte, addr net.Addr, err error)) {
+	if fn == nil {
+		r.receiver.Store(nil)
+		return
+	}
+	r.receiver.Store(&fn)
 }
