@@ -52,26 +52,31 @@ func benchmark(b *testing.B, client io.Writer, server io.Reader, sz int) {
 	if _, err := rand.Read(data); err != nil {
 		b.Fatal(err)
 	}
+	// Reads and writes run concurrently and must not share a buffer.
+	recvData := make([]byte, sz)
 
 	total := 0
 	wg := sync.WaitGroup{}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		var sendErr, recvErr error
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			if err := sendMsg(client, data); err != nil {
-				b.Fatal(err)
-			}
+			sendErr = sendMsg(client, data)
 		}()
 		go func() {
 			defer wg.Done()
-			if err := recvMsg(server, data); err != nil {
-				b.Fatal(err)
-			}
-			total += sz
+			recvErr = recvMsg(server, recvData)
 		}()
 		wg.Wait()
+		if sendErr != nil {
+			b.Fatal(sendErr)
+		}
+		if recvErr != nil {
+			b.Fatal(recvErr)
+		}
+		total += sz
 	}
 	b.ReportAllocs()
 	b.SetBytes(int64(total / b.N))
