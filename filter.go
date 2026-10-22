@@ -172,7 +172,7 @@ func (d *PacketFilter) Overflow() uint64 {
 func (d *PacketFilter) Start() {
 	msgReader := d.readFrom
 	if d.ipv4Conn != nil {
-		msgReader = d.readBatch
+		msgReader = d.batchReader()
 	} else if d.oobConn != nil {
 		msgReader = d.readMsgUdp
 	}
@@ -195,13 +195,21 @@ func (d *PacketFilter) readFrom() []messageWithError {
 	}
 }
 
-func (d *PacketFilter) readBatch() []messageWithError {
+// batchReader returns a reader that reuses its batch and result slices. Only
+// the loop goroutine calls it, and the filter itself stays unchanged.
+func (d *PacketFilter) batchReader() func() []messageWithError {
 	batch := make([]ipv4.Message, d.batchSize)
+	result := make([]messageWithError, d.batchSize)
+	return func() []messageWithError { return d.readBatch(batch, result) }
+}
+
+func (d *PacketFilter) readBatch(batch []ipv4.Message, result []messageWithError) []messageWithError {
 	for i := range batch {
-		buf := d.bufPool.Get().([]byte)
-		oobBuf := d.bufPool.Get().([]byte)
-		batch[i].Buffers = [][]byte{buf}
-		batch[i].OOB = oobBuf
+		// Buffers is new each time because a queued message keeps it.
+		batch[i] = ipv4.Message{
+			Buffers: [][]byte{d.bufPool.Get().([]byte)},
+			OOB:     d.bufPool.Get().([]byte),
+		}
 	}
 
 	n, err := d.ipv4Conn.ReadBatch(batch, 0)
@@ -217,7 +225,7 @@ func (d *PacketFilter) readBatch() []messageWithError {
 		n = 1
 	}
 
-	result := make([]messageWithError, n)
+	result = result[:n]
 
 	for i := 0; i < n; i++ {
 		result[i].Err = err
