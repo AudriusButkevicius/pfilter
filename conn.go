@@ -209,6 +209,14 @@ func (r *filteredConn) SetReadBuffer(sz int) error {
 	return errNotSupported
 }
 
+// SetWriteBuffer sets the send buffer size of the shared underlying socket.
+func (r *filteredConn) SetWriteBuffer(sz int) error {
+	if swb, ok := r.source.conn.(interface{ SetWriteBuffer(int) error }); ok {
+		return swb.SetWriteBuffer(sz)
+	}
+	return errNotSupported
+}
+
 func (r *filteredConn) SyscallConn() (syscall.RawConn, error) {
 	if r.source.oobConn != nil {
 		return r.source.oobConn.SyscallConn()
