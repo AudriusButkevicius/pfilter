@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/pkg/errors v0.9.1
 	github.com/quic-go/quic-go v0.32.0
-	golang.org/x/net v0.54.0
+	golang.org/x/net v0.55.0
 )
 
 require (
