@@ -1,7 +1,6 @@
 package pfilter
 
 import (
-	"net"
 	"testing"
 	"time"
 )
@@ -15,23 +14,29 @@ func TestBufPoolPutDoesNotAllocate(t *testing.T) {
 	}
 }
 
-func BenchmarkFilteredPacket(b *testing.B) {
-	sock, _ := net.ListenPacket("udp", "127.0.0.1:0")
-	f := NewPacketFilter(sock)
-	c := f.NewConn(1, nil)
-	f.Start()
-	peer, _ := net.ListenPacket("udp", "127.0.0.1:0")
-	defer peer.Close()
-	defer sock.Close()
-	msg := []byte("x")
-	buf := make([]byte, 1500)
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		peer.WriteTo(msg, sock.LocalAddr())
-		c.SetReadDeadline(time.Now().Add(time.Second))
-		if _, _, err := c.ReadFrom(buf); err != nil {
-			b.Fatal(err)
+func TestBufPoolFullAndEmptyNeverBlock(t *testing.T) {
+	p := newBufPool(1500)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		// Exhaust the free list, then return more buffers than it can retain.
+		buffers := make([][]byte, cap(p.free)+1)
+		for i := range buffers {
+			buffers[i] = p.get()
+			if len(buffers[i]) != 1500 {
+				t.Errorf("buffer length %d, want 1500", len(buffers[i]))
+			}
 		}
+		for _, buf := range buffers {
+			p.put(buf)
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("pool blocked when empty or full")
+	}
+	if len(p.free) != cap(p.free) {
+		t.Fatalf("retained %d buffers, want %d", len(p.free), cap(p.free))
 	}
 }
